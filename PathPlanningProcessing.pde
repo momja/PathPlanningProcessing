@@ -1,5 +1,6 @@
 // Max Omdal 2020
 
+
 void setup() {
 
 
@@ -8,4 +9,8 @@ void setup() {
 void draw() {
 
     
+}
+
+void createObstacles() {
+
 }
