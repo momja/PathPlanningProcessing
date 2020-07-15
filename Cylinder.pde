@@ -3,8 +3,8 @@
 class Cylinder {
     float radius;
     float height;
-    float center;
-    float sides = 15;
+    Vec3 center;
+    float sides = 20;
     Vec3 materialColor = new Vec3(255,255,255);
 
     public Cylinder(float radius, float height, Vec3 center) {
@@ -21,20 +21,15 @@ class Cylinder {
         fill(materialColor.x, materialColor.y, materialColor.z);
         // Draw the sides of the cylinder
         beginShape(QUAD_STRIP);
-        for (int i = 0; i < sides; i++) {
+        for (int i = 0; i < sides+1; i++) {
             theta += stepSize;
-            Vec3 vertexPos;
-            vertexPos = new Vec3(this.center.x + this.radius * cos(theta),
+            Vec3 vertexPos = new Vec3(this.center.x + this.radius * cos(theta),
                                     this.center.y + this.height/2,
                                     this.center.z + this.radius * sin(theta));
-            if (i % 2 == 0) {
-                vertex(vertexPos.x, vertexPos.y, vertexPos.z);
-                vertex(vertexPos.x, vertexPos.y - this.height, vertexPos.z);
-            } else {
-                vertex(vertexPos.x, vertexPos.y, vertexPos.z);
-                vertex(vertexPos.x + cos(stepSize), vertexPos.y, vertexPos.z + sin(stepSize));                
-            }
-                vertex(vertexPos.x + cos(stepSize), vertexPos.y - this.height, vertexPos.z + sin(stepSize));
+            Vec3 vecNormal = center.minus(vertexPos).normalized();
+            normal(vecNormal.x, vecNormal.y, vecNormal.z);
+            vertex(vertexPos.x, vertexPos.y, vertexPos.z);
+            vertex(vertexPos.x, vertexPos.y - this.height, vertexPos.z);
         }
         endShape(CLOSE);
         

@@ -35,7 +35,9 @@
 // these and other issues as you work on this assignment (don't assume 
 // this example funcationality is correct and copy it's mistakes!).
 
-
+import java.util.Comparator;
+import java.util.PriorityQueue;
+import java.util.Collections;
 
 //Here, we represent our graph structure as a neighbor list
 //You can use any graph representation you like
@@ -76,13 +78,120 @@ int closestNode(Vec2 point, Vec2[] nodePos, int numNodes){
 
 ArrayList<Integer> planPath(Vec2 startPos, Vec2 goalPos, Vec2[] centers, float[] radii, int numObstacles, Vec2[] nodePos, int numNodes){
   ArrayList<Integer> path = new ArrayList();
+  // int startID = closestNode(startPos, nodePos, numNodes);
+  // int goalID = closestNode(goalPos, nodePos, numNodes);
+  int startID = numNodes;
+  int goalID = numNodes + 1;
+
+  // Add start and end node to graph
+  numNodes+=2;
+  nodePos[startID] = startPos;
+  nodePos[goalID] = goalPos;
+
+  neighbors[startID] = new ArrayList<Integer>();
+  neighbors[goalID] = new ArrayList<Integer>();
+  // Set up neighbors
+  if (pointInCircleList(centers, radii, numObstacles, startPos) || pointInCircleList(centers, radii, numObstacles, goalPos)) {
+    path.add(0,-1);
+    return path;
+  }
+  for (int i = 0; i < numNodes; i++) {
+    Vec2 startToNode = nodePos[i].minus(startPos);
+    if (!rayCircleListIntersect(centers, radii, numObstacles, startPos, startToNode.normalized(), startToNode.length()).hit) {
+      neighbors[i].add(startID);
+      neighbors[startID].add(i);
+    }
+    Vec2 nodeToGoal = goalPos.minus(nodePos[i]);
+    if (!rayCircleListIntersect(centers, radii, numObstacles, nodePos[i], nodeToGoal.normalized(), nodeToGoal.length()).hit) {
+      neighbors[i].add(goalID);
+      neighbors[goalID].add(i);
+    }
+  }
+
+  path = runAStar(nodePos, numNodes, startID, goalID);
   
-  connectNeighbors(centers, radii, numObstacles, nodePos, numNodes);
-  int startID = closestNode(startPos, nodePos, numNodes);
-  int goalID = closestNode(goalPos, nodePos, numNodes);
+  return path;
+}
+
+class NodeHeuristic {
+  float distanceFromStart;
+  float heuristicToGoal;
+  int uid;
+  boolean visited;
+  NodeHeuristic parent;
+  Vec2 pos;
+}
+
+class SortByPathLength implements Comparator<NodeHeuristic> {
+  public int compare(NodeHeuristic a, NodeHeuristic b) {
+    return (int)((a.heuristicToGoal + a.distanceFromStart) - (b.heuristicToGoal + b.distanceFromStart));
+  }
+}
+
+//A*
+ArrayList<Integer> runAStar(Vec2[] nodePos, int numNodes, int startID, int goalID) {
+  NodeHeuristic[] nodes = new NodeHeuristic[numNodes];
+  Comparator<NodeHeuristic> comparator = new SortByPathLength();
+  PriorityQueue<NodeHeuristic> fringeQueue = new PriorityQueue<NodeHeuristic>(10, comparator);
+  ArrayList<Integer> path = new ArrayList(); // Will resolve to final path
+
+  // 0.) Clear visit tags and parent pointers, and define all heuristics
+  for (int i = 0; i < numNodes; i++) {
+    visited[i] = false;
+    parent[i] = -1;
+    nodes[i] = new NodeHeuristic();
+    nodes[i].distanceFromStart = Float.MAX_VALUE;
+    nodes[i].heuristicToGoal = nodePos[i].minus(nodePos[goalID]).length();
+    nodes[i].uid = i;
+    nodes[i].visited = false;
+    nodes[i].pos = nodePos[i];
+  }
+
+  // 0.1.) Special case is first pt.
+  nodes[startID].distanceFromStart = 0;
+  fringeQueue.add(nodes[startID]);
+
+  NodeHeuristic currentNode = fringeQueue.peek();
   
-  path = runBFS(nodePos, numNodes, startID, goalID);
-  
+  while (fringeQueue.size() > 0) {
+    // 1.) Choose the path with shortest length + heuristic and update visited
+    currentNode = fringeQueue.poll();
+
+    if (currentNode.uid == goalID) {
+      // We've found the goal, but we don't yet know if it is optimal. Regardless, we don't get neighbor
+      return reconstructPath(currentNode);
+    }
+
+    for (int neighbor : neighbors[currentNode.uid]) {
+      NodeHeuristic neighborNode = nodes[neighbor];
+      // if (neighborNode.visited == false) {
+        // neighborNode.visited = true;
+        float newDistance = currentNode.distanceFromStart + currentNode.pos.distanceTo(neighborNode.pos);
+        if (newDistance < neighborNode.distanceFromStart) {
+          // We can safely ignore nodes that have a distance greater than the min path because the heuristic will always be a lower bound
+          neighborNode.parent = currentNode;
+          neighborNode.distanceFromStart = newDistance;
+          fringeQueue.add(neighborNode);
+        }
+      // }
+    }
+  }
+
+  path.add(0,-1);
+  return path;
+}
+
+public ArrayList<Integer> reconstructPath(NodeHeuristic goal) {
+  ArrayList<Integer> path = new ArrayList<Integer>();
+  // Reconstruct path from current node
+  NodeHeuristic curNode = goal;
+  while (curNode != null) {
+    path.add(curNode.uid);
+    curNode = curNode.parent;
+  }
+
+  Collections.reverse(path);
+
   return path;
 }
 
@@ -139,4 +248,58 @@ ArrayList<Integer> runBFS(Vec2[] nodePos, int numNodes, int startID, int goalID)
   //print("\n");
   
   return path;
+}
+
+
+void drawPRMGraph() {
+    push();
+    stroke(0,255,255);
+    strokeWeight(5);
+    for (int i = 0; i < numNodes; i++) {
+        point(nodePos[i].x, -3, nodePos[i].y);
+    }
+    stroke(255,0,0);
+    strokeWeight(1);
+    for (int i = 0; i < numNodes; i++) {
+      Vec3 pos = new Vec3(nodePos[i].x, -3, nodePos[i].y);
+      for (int neighbor : neighbors[i]) {
+        Vec3 neighborPos = new Vec3(nodePos[neighbor].x, -3, nodePos[neighbor].y);
+        line(pos.x, pos.y, pos.z, neighborPos.x, neighborPos.y, neighborPos.z);
+      }
+    }
+    pop();
+}
+
+// Vec2 proportionAlongPath(float t, int[] path) {
+//   float totalLength = 0;
+//   for (int i : path) {
+//     totalLength += nodePos[i].length();
+//   }
+//   float distanceAlongPath = totalLength*t;
+//   float tmpLength = 0;
+//   for (int i = 0; i < path.length - 1; i++) {
+//     int idx1 = path[i];
+//     int idx2 = path[i+1];
+//     Vec2 btwnNodes = nodePos[idx2].minus(nodePos[idx1]);
+//     tmpLength += btwnNodes.length();
+//     if (tmpLength > distanceAlongPath) {
+//       float segmentT = (distanceAlongPath - (tmpLength - btwnNodes.length())) / btwnNodes.length();
+//       return btwnNodes.normalized().times(segmentT);
+//     }
+//   }
+//   return null;
+// }
+
+Vec2 positionAlongPath(float distanceTravelled, int[] path) {
+  float totalLength = 0;
+  for (int i = 0; i < path.length - 1; i++) {
+    int idx1 = path[i];
+    int idx2 = path[i+1];
+    Vec2 btwnNodes = nodePos[idx2].minus(nodePos[idx1]);
+    totalLength += btwnNodes.length();
+    if (totalLength > distanceTravelled) {
+      return nodePos[idx1].plus(btwnNodes.normalized().times(distanceTravelled - (totalLength - btwnNodes.length())));
+    }
+  }
+  return null;
 }
