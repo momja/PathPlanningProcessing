@@ -3,7 +3,7 @@ class Camera {
     Vec3 camLookAt = new Vec3(0,0,0);
     Vec3 camUp = new Vec3(0,-1,0);
     float radius = 40;
-    int slider = 80;
+    int slider = 200;
     float theta = 0;
     float fov = 55;
     float nearPlaneW = 1 + 1.f/3;
@@ -13,19 +13,20 @@ class Camera {
 
     public void update() {
         if (keyPressed) {
-            if (keyCode == UP) {
-                slider++;
-            } else if (keyCode == DOWN) {
-                slider--;
-            } else if (keyCode == LEFT) {
+            if (keys[6]) {
+                slider += 3;
+            } else if (keys[7]) {
+                slider -= 3;
+            } else if (keys[4]) {
                 theta -= 0.8;
-            } else if (keyCode == RIGHT) {
+            } else if (keys[5]) {
                 theta += 0.8;
             }
         }
         camLocation.x = cos(radians(theta))*radius;
         camLocation.y = float(slider)/5;
         camLocation.z = sin(radians(theta))*radius;
+        camLocation.add(camLookAt);
         camera(camLocation.x, camLocation.y, camLocation.z,
                camLookAt.x,   camLookAt.y,   camLookAt.z,
                camUp.x,       camUp.y,       camUp.z);

@@ -4,8 +4,8 @@ public class BoidSystem {
     // // private ArrayList<Quaternion> boidOrientations;
     // private ArrayList<Vec3> boidVelocities;
     // private ArrayList<Float> perchedBoidCountdowns;
-    private ArrayList<Boid> boids;
-    private float width, height, length;
+    protected ArrayList<Boid> boids;
+    protected float width, height, length;
 
     Vec3 boundingBoxOrigin = new Vec3(0,25,0);
     float minX, maxX, minY, maxY, minZ, maxZ;
@@ -22,8 +22,16 @@ public class BoidSystem {
     PShape boidPerchedModel = null;
     Vec3 tetherPoint = new Vec3(8,5,-4);
     float influenceToTetherPoint = 0.03;
+    Vec3 spawnPoint;
+    OctreeTriangles octree;
 
     public BoidSystem(int boidCount) {
+        this.boidCount = boidCount;
+        OctantTris octreeBounds = new OctantTris(new Vec3(), new Vec3(200,200,200));
+        this.octree = new OctreeTriangles(octreeBounds, 20);
+    }
+
+    public void initialize() {
         // boidCoords = new ArrayList<Vec3>();
         // boidPrevCoords = new ArrayList<Vec3>();
         // // boidOrientations = new ArrayList<Quaternion>();
@@ -31,8 +39,7 @@ public class BoidSystem {
         // perchedBoidCountdowns = new ArrayList<Float>();
         boids = new ArrayList<Boid>();
         setBoundingBox(boundingBoxOrigin, 100, 60, 100);
-        this.boidCount = boidCount;
-        initializePositions();
+        initializePositions(spawnPoint);
     }
 
     public void setBoundingBox(Vec3 origin, float width, float height, float length) {
@@ -49,74 +56,80 @@ public class BoidSystem {
         maxZ = origin.z + length/2;
     }
 
-    public void checkForCollisions(PShape[] rigidBodies) {
+    public void checkForCollisions(PShape[] rigidBodies, int numRigidBodies) {
         // Check each boid to see if it has collided with the collision meshes
-        for (PShape rigidBody : rigidBodies) {
-        int triCount = rigidBody.getChildCount();
-        for (int i = 0; i < triCount; i++) {
-            PShape triangle = rigidBody.getChild(i);
-            int j = 0;
-            while(j < boidCount) {
-                Boid boid = boids.get(j);
-                Vec3 boidPosition = boid.coords;
-                if (boid.perchCountdown > 0 || boidPosition.y > 5 || boidPosition.x > 20 || boidPosition.x < -20 || boidPosition.z > 20 || boidPosition.z < -20) {
-                    j++;
-                    continue;
-                }
-                // TODO: Use Barycentric Coordinates to find if there is a collision with the surface
-                boolean collision = false;
-                Vec3 collisionPoint = new Vec3(0,0,0);
+        for (int i = 0; i < numRigidBodies; i++) {
+            PShape rigidBody = rigidBodies[i];
+            checkCollision(rigidBody);
+        }
+    }
 
-                Vec3 rayOrigin = boidPosition;
-                Vec3 rayDirection = boidPosition.minus(boid.previousCoord);
-                float maxT = rayDirection.length();
+    public void checkCollision(PShape rigidBody) {
+        for (int i = 0; i < rigidBody.getChildCount(); i++) {
+            PShape child = rigidBody.getChild(i);
+            if (child.getChildCount() != 0) {
+                checkCollision(child);
+            } else {
+                for (int v = 0; v < child.getVertexCount(); v+=3) {
+                    int j = 0;
+                    PVector v1 = child.getVertex(v);
+                    PVector v2 = child.getVertex(v+1);
+                    PVector v3 = child.getVertex(v+2);
 
-                if (maxT < 0.00001) {
-                    j++;
-                    continue;
-                }
+                    Vec3 vert1 = new Vec3(v1.x, v1.y, v1.z);
+                    Vec3 vert2 = new Vec3(v2.x, v2.y, v2.z);
+                    Vec3 vert3 = new Vec3(v3.x, v3.y, v3.z);
 
-                rayDirection.normalize();
+                    Vec3 e1 = vert2.minus(vert1);
+                    Vec3 e2 = vert3.minus(vert1);
 
-                PVector v1 = triangle.getVertex(0);
-                PVector v2 = triangle.getVertex(1);
-                PVector v3 = triangle.getVertex(2);
+                    while(j < boidCount) {
+                        Boid boid = boids.get(j);
+                        Vec3 boidPosition = boid.coords;
+                        // TODO: Use Barycentric Coordinates to find if there is a collision with the surface
+                        boolean collision = false;
+                        Vec3 collisionPoint = new Vec3(0,0,0);
 
-                Vec3 vert1 = new Vec3(v1.x, v1.y, v1.z);
-                Vec3 vert2 = new Vec3(v2.x, v2.y, v2.z);
-                Vec3 vert3 = new Vec3(v3.x, v3.y, v3.z);
+                        Vec3 rayOrigin = boidPosition;
+                        Vec3 rayDirection = boidPosition.minus(boid.previousCoord);
+                        float maxT = rayDirection.length();
+                        rayDirection.normalize();
 
-                Vec3 e1 = vert2.minus(vert1);
-                Vec3 e2 = vert3.minus(vert1);
+                        if (maxT < 0.00001) {
+                            j++;
+                            continue;
+                        }
 
-                Vec3 surfaceNormal = cross(e1, e2);
-                // float x_0 = rayOrigin.x; float y_0 = rayOrigin.y; float z_0 = rayOrigin.z;
-                // float x_d = rayDirection.x; float y_d = rayDirection.y; float z_d = rayDirection.z;
-                float denominator = dot(surfaceNormal, rayDirection);
-                if (abs(denominator) <= 0.0001) {
-                    // No ray plane intersection exists
-                    j++;
-                    continue;
-                }
+                        rayDirection.normalize();
 
-                float D = dot(vert1, surfaceNormal);
+                        Vec3 surfaceNormal = cross(e1, e2).normalized();
+                        // float x_0 = rayOrigin.x; float y_0 = rayOrigin.y; float z_0 = rayOrigin.z;
+                        // float x_d = rayDirection.x; float y_d = rayDirection.y; float z_d = rayDirection.z;
+                        float denominator = dot(surfaceNormal, rayDirection);
+                        if (abs(denominator) <= 0.0001) {
+                            // No ray plane intersection exists
+                            j++;
+                            continue;
+                        }
 
-                float numerator = -(dot(surfaceNormal, rayOrigin) - D);
+                        float D = dot(vert1, surfaceNormal);
 
-                float t = numerator/denominator;
+                        float numerator = -(dot(surfaceNormal, rayOrigin) - D);
 
-                if (t < 0) {
-                    // Haven't hit yet
-                    j++;
-                    continue;
-                }
-                
-                Vec3 p = rayOrigin.plus(rayDirection.times(t));
+                        float t = numerator/denominator;
 
-                if (t < maxT && pointLiesOnTriangle(p, vert1, vert2, vert3, e1, e2)) {
-                    perchBoid(j, p, reflect(rayDirection, surfaceNormal));
-                }
-                j++;
+                        if (t < 0.00000001) {
+                            // Haven't hit yet
+                            j++;
+                            continue;
+                        }
+                        Vec3 p = rayOrigin.plus(rayDirection.times(t));
+                        if (t < maxT && pointLiesOnTriangle(p, vert1, vert2, vert3, e1, e2)) {
+                            boid.coords = p;
+                            boid.velocity = reflect(boid.velocity, surfaceNormal);
+                        }
+                        j++;
+                    }
                 }
             }
         }
@@ -139,6 +152,7 @@ public class BoidSystem {
         boid.coords = position;
         boid.previousCoord = position;
         boid.perchCountdown = 0.f;
+        boid.id = boidCount;
 
         Vec3 velocity = new Vec3(random(-1,1),random(-1,1),random(-1,1));
         velocity.normalize();
@@ -154,16 +168,18 @@ public class BoidSystem {
         boidCount--;
     }
 
-    public void initializePositions() {
+    public void initializePositions(Vec3 spawnPoint) {
         // Given the bounding box, we will randomly place our boids within this box
         for (int i = 0; i < boidCount; i++) {
             Vec3 position = new Vec3(random(minX, maxX),
                                      random(minY, maxY)/2,
                                      random(minZ, maxZ));
+            position.plus(spawnPoint);
             Boid boid = new Boid();
             boid.coords = position;
             boid.previousCoord = position;
             boid.perchCountdown = 0.f;
+            boid.id = i;
 
             Vec3 velocity = new Vec3(random(-1,1),random(-1,1),random(-1,1));
             velocity.normalize();
@@ -220,7 +236,7 @@ public class BoidSystem {
             for (Boid boid : boids) {
                 // Draw boid model
                 Vec3 pos = boid.coords;
-                if (pos.distanceTo(camLocation) > 30) {
+                if (pos.distanceTo(cam.camLocation) > 30) {
                     push();
                     stroke(boidColor.x, boidColor.y, boidColor.z);
                     strokeWeight(3);
@@ -252,11 +268,22 @@ public class BoidSystem {
                 // Draw a point
                 Vec3 pos = boid.coords;
                 push();
-                stroke(255);
+                stroke(boidColor.x, boidColor.y, boidColor.z);
                 strokeWeight(boidSize);
                 point(pos.x, pos.y, pos.z);
                 pop();
             }
+        }
+        if (debugMode) {
+            push();
+            stroke(255, 0, 0);
+            strokeWeight(1);
+            for(Boid boid : boids) {
+                Vec3 endPtVelDir = boid.coords.plus(boid.velocity.times(0.5));
+                line(boid.coords.x, boid.coords.y, boid.coords.z,
+                     endPtVelDir.x, endPtVelDir.y, endPtVelDir.z);
+            }
+            pop();
         }
     }
 
@@ -372,4 +399,5 @@ public class Boid {
     Vec3 previousCoord;
     float perchCountdown;
     Vec3 velocity;
+    int id;
 }

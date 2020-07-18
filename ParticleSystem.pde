@@ -259,14 +259,19 @@ public class ParticleSystem {
          particleCoords.get(partIdx).z - streakLength*vel.z*velMagnitude/70);
       pop();
       if (particleTexture == null) {
+        push();
         stroke(particleColors.get(partIdx).x, particleColors.get(partIdx).y, particleColors.get(partIdx).z);
         strokeWeight(particleRadii.get(partIdx));
         point(particleCoords.get(partIdx).x, particleCoords.get(partIdx).y, particleCoords.get(partIdx).z);
+        pop();
       } else {
         push();
         noStroke();
         translate(particleCoords.get(partIdx).x, particleCoords.get(partIdx).y, particleCoords.get(partIdx).z);
-        rotateY (-radians(theta+270));
+        Vec3 camToParticle = particleCoords.get(partIdx).minus(cam.camLocation).normalized();
+        Vec2 camToParticle2D = new Vec2(camToParticle.x, camToParticle.z).normalized();
+        float angle = atan2(camToParticle2D.y,camToParticle2D.x);
+        rotateY (-angle-3*PI/2);
         beginShape();
         texture(particleTexture);
         float width_2 = particleRadii.get(partIdx);
@@ -286,8 +291,12 @@ public class ParticleSystem {
     }
   }
 
-  public void drawTriggers(float dt) {
-    triggerCollection.drawAllTriggers(dt);
+  public void updateTriggers(float dt) {
+    triggerCollection.updateAllTriggers(dt);
+  }
+
+  public void drawTriggers() {
+    triggerCollection.drawAllTriggers();
   }
 }
 

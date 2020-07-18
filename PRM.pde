@@ -45,6 +45,8 @@ ArrayList<Integer>[] neighbors = new ArrayList[maxNumNodes];  //A list of neighb
 //We also want some help arrays to keep track of some information about nodes we've visited
 Boolean[] visited = new Boolean[maxNumNodes]; //A list which store if a given node has been visited
 int[] parent = new int[maxNumNodes]; //A list which stores the best previous node on the optimal path to reach this node
+ArrayList<Integer> nodesTouchingStart = new ArrayList<Integer>();
+ArrayList<Integer> nodesTouchingGoal = new ArrayList<Integer>();
 
 //Set which nodes are connected to which neighbors (graph edges) based on PRM rules
 void connectNeighbors(Vec2[] centers, float[] radii, int numObstacles, Vec2[] nodePos, int numNodes){
@@ -90,6 +92,8 @@ ArrayList<Integer> planPath(Vec2 startPos, Vec2 goalPos, Vec2[] centers, float[]
 
   neighbors[startID] = new ArrayList<Integer>();
   neighbors[goalID] = new ArrayList<Integer>();
+  nodesTouchingGoal = new ArrayList<Integer>();
+  nodesTouchingStart = new ArrayList<Integer>();
   // Set up neighbors
   if (pointInCircleList(centers, radii, numObstacles, startPos) || pointInCircleList(centers, radii, numObstacles, goalPos)) {
     path.add(0,-1);
@@ -99,16 +103,26 @@ ArrayList<Integer> planPath(Vec2 startPos, Vec2 goalPos, Vec2[] centers, float[]
     Vec2 startToNode = nodePos[i].minus(startPos);
     if (!rayCircleListIntersect(centers, radii, numObstacles, startPos, startToNode.normalized(), startToNode.length()).hit) {
       neighbors[i].add(startID);
+      nodesTouchingStart.add(i);
       neighbors[startID].add(i);
     }
     Vec2 nodeToGoal = goalPos.minus(nodePos[i]);
     if (!rayCircleListIntersect(centers, radii, numObstacles, nodePos[i], nodeToGoal.normalized(), nodeToGoal.length()).hit) {
       neighbors[i].add(goalID);
+      nodesTouchingGoal.add(i);
       neighbors[goalID].add(i);
     }
   }
 
   path = runAStar(nodePos, numNodes, startID, goalID);
+
+  // Reset neighbors
+  for (int idx : nodesTouchingStart) {
+    neighbors[idx].remove(neighbors[idx].size() - 1);
+  }
+  for (int idx : nodesTouchingGoal) {
+    neighbors[idx].remove(neighbors[idx].size() - 1);
+  }
   
   return path;
 }
@@ -259,7 +273,7 @@ void drawPRMGraph() {
         point(nodePos[i].x, -3, nodePos[i].y);
     }
     stroke(255,0,0);
-    strokeWeight(1);
+    strokeWeight(0.3);
     for (int i = 0; i < numNodes; i++) {
       Vec3 pos = new Vec3(nodePos[i].x, -3, nodePos[i].y);
       for (int neighbor : neighbors[i]) {

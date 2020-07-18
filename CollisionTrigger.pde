@@ -10,7 +10,10 @@ public class CollisionTrigger {
         return new CollisionTrigger();
     }
 
-    public void draw(float dt) {
+    public void update(float dt) {
+    }
+
+    public void draw() {
     }
 }
 
@@ -46,14 +49,20 @@ public class SpawnEmitter extends CollisionTrigger {
         emitter.particleDirection = normal;
     }
 
-    public void draw(float dt) {
+    @Override 
+    public void update(float dt) {
         emitter.generateNewParticles(dt);
         emitter.updateParticlePositions(dt);
         emitter.updateParticleProperties(dt);
         emitter.removeDeadParticles();
+        emitter.updateTriggers(dt);
+    }
+
+    @Override
+    public void draw() {
         while (emitter.drawNextParticle()) {
         }
-        emitter.drawTriggers(dt);
+        emitter.drawTriggers();
         this.isActive = emitter.isActive;
     }
 }
@@ -61,8 +70,6 @@ public class SpawnEmitter extends CollisionTrigger {
 public class AnimateRaindropCollision extends CollisionTrigger {
     @Override
     public void onCollision(Vec3 point, Vec3 normal) {
-        // TODO : Spawn a textured quad that animates through a series
-        // of raindrop splash images
         super.onCollision(point, normal);
     }
 }
@@ -78,12 +85,12 @@ public class TriggerCollection {
         triggers.add(trigger);
     }
 
-    public void drawAllTriggers(float dt) {
+    public void updateAllTriggers(float dt) {
         int i = 0;
         while (i < triggers.size()) {
             CollisionTrigger trigger = triggers.get(i);
 
-            trigger.draw(dt);
+            trigger.update(dt);
 
             if (!trigger.isActive) {
                 // Remove any inactive triggers
@@ -92,5 +99,61 @@ public class TriggerCollection {
             }
             i++;
         }
+    }
+
+    public void drawAllTriggers() {
+        int i = 0;
+        while (i < triggers.size()) {
+            CollisionTrigger trigger = triggers.get(i);
+            trigger.draw();
+            i++;
+        }
+    }
+}
+
+public class AnimateExplosion extends CollisionTrigger {
+    ParticleSystem explosion;
+
+    public AnimateExplosion() {
+        explosion = new ParticleSystem(100);
+        explosion.streakLength = 0;
+        explosion.particleLifespanMax = 1.0;
+        explosion.particleLifespanMin = 0.7;
+        explosion.birthRate = 200;
+        explosion.emitterLifespan = 0.2;
+        explosion.r = 5;
+        explosion.particleSpeed = 20;
+        explosion.speedRange = 5;
+        explosion.particleDirection = new Vec3(0,0,0);
+        explosion.particleDirectionRange = 1;
+        explosion.particleAcceleration = new Vec3();
+    }
+
+    @Override
+    public AnimateExplosion copy() {
+        return new AnimateExplosion();
+    }
+
+    @Override
+    public void onCollision(Vec3 point, Vec3 normal) {
+        super.onCollision(point, normal);
+        explosion.emitterPosition = point;
+    }
+
+    @Override
+    public void update(float dt) {
+        explosion.generateNewParticles(dt);
+        explosion.updateParticlePositions(dt);
+        explosion.updateParticleProperties(dt);
+        explosion.removeDeadParticles();
+        explosion.updateTriggers(dt);
+    }
+
+    @Override
+    public void draw() {
+        while (explosion.drawNextParticle()) {
+        }
+        explosion.drawTriggers();
+        this.isActive = explosion.isActive;
     }
 }
