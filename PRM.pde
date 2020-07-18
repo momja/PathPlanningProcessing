@@ -80,8 +80,11 @@ int closestNode(Vec2 point, Vec2[] nodePos, int numNodes){
 
 ArrayList<Integer> planPath(Vec2 startPos, Vec2 goalPos, Vec2[] centers, float[] radii, int numObstacles, Vec2[] nodePos, int numNodes){
   ArrayList<Integer> path = new ArrayList();
-  // int startID = closestNode(startPos, nodePos, numNodes);
-  // int goalID = closestNode(goalPos, nodePos, numNodes);
+
+  if (startPos == goalPos) {
+    return null;
+  }
+
   int startID = numNodes;
   int goalID = numNodes + 1;
 
@@ -272,15 +275,15 @@ void drawPRMGraph() {
     for (int i = 0; i < numNodes; i++) {
         point(nodePos[i].x, -3, nodePos[i].y);
     }
-    stroke(255,0,0);
-    strokeWeight(0.3);
-    for (int i = 0; i < numNodes; i++) {
-      Vec3 pos = new Vec3(nodePos[i].x, -3, nodePos[i].y);
-      for (int neighbor : neighbors[i]) {
-        Vec3 neighborPos = new Vec3(nodePos[neighbor].x, -3, nodePos[neighbor].y);
-        line(pos.x, pos.y, pos.z, neighborPos.x, neighborPos.y, neighborPos.z);
-      }
-    }
+    // stroke(255,0,0);
+    // strokeWeight(0.3);
+    // for (int i = 0; i < numNodes; i++) {
+    //   Vec3 pos = new Vec3(nodePos[i].x, -3, nodePos[i].y);
+    //   for (int neighbor : neighbors[i]) {
+    //     Vec3 neighborPos = new Vec3(nodePos[neighbor].x, -3, nodePos[neighbor].y);
+    //     line(pos.x, pos.y, pos.z, neighborPos.x, neighborPos.y, neighborPos.z);
+    //   }
+    // }
     pop();
 }
 

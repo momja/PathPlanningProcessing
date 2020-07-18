@@ -16,10 +16,10 @@ class Bats extends BoidSystem {
         boids = new ArrayList<Boid>();
         this.tetherPoints = new Vec3[numTetherPoints];
         this.boundingBoxOrigin = new Vec3(0,0,0);
-        this.maxSpeed = 200;
-        this.visualDistance = 0.9;
+        this.maxSpeed = 100;
+        this.visualDistance = 1.5;
         this.influenceToTetherPoint = 1.5;
-        this.separation = 1.5;
+        this.separation = 2.5;
         this.boidSize = 5;
 
         for (int i = 0; i < numTetherPoints; i++) {

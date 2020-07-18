@@ -9,18 +9,24 @@ class PathTraversal {
     boolean destinationReached = false;
     Vec2 movementDir;
 
-    public void setPath(Vec2 startPos, Vec2 goalPos) {
+    public boolean setPath(Vec2 startPos, Vec2 goalPos) {
         this.startPos = new Vec2(startPos);
         this.goalPos = new Vec2(goalPos);
         this.path = planPath(startPos, goalPos, circlePos, circleRad, numObstacles, nodePos, numNodes);
         this.nextNodeIdx = 1;
+        if (path == null || path.size() == 1) {
+            return false;
+        }
         this.movementDir = nodePos[path.get(1)].minus(startPos);
         this.distanceToNextNode = movementDir.length();
         this.movementDir.normalize();
+        return true;
     }
 
     public Vec2 getNextNodeOnPath() {
         if (path != null) {
+            if (nextNodeIdx == path.size() - 1)
+                return this.goalPos;
             return nodePos[path.get(nextNodeIdx)];
         } else {
             return null;
@@ -30,7 +36,6 @@ class PathTraversal {
     public void updateMovementDir(Vec2 curPos) {
         nodePos[numNodes] = startPos;
         nodePos[numNodes+1] = goalPos;
-
         Vec2 curPosToNode = nodePos[path.get(nextNodeIdx)].minus(curPos);
 
         // Check to see if we can shortcut any nodes

@@ -22,6 +22,7 @@ public class PathPlanningProcessing extends PApplet {
 // Max Omdal 2020
 
 
+int curTime;
 boolean paused = false;
 Camera cam = new Camera();
 int maxNumNodes = 2000;
@@ -37,6 +38,7 @@ Vec2[] posAlongPath = new Vec2[3];
 int[] nextNodeIdx = new int[3];
 float[] distanceToNextNode = new float[3];
 int nextSpawnIndex = 0;
+ArrayList<Agent> agents = new ArrayList<Agent>();
 
 PShader unlitShader;
 
@@ -80,7 +82,9 @@ public void setup() {
     player = new Player(new Vec3(0, -5, 0));
     joker = new Enemy(new Vec3(nodePos[3].x, -5, nodePos[3].y));
 
-    bats = new Bats(10);
+    agents.add(joker);
+
+    bats = new Bats(20);
     bats.spawnPoints = spawnPoints;
     bats.numTetherPoints = 3;
     bats.initialize();
@@ -92,6 +96,10 @@ public void setup() {
 }
 
 public void draw() {
+    curTime = millis();
+    if (curTime % 1000 < 10) {
+        println(frameRate);
+    }
     cam.update();
     background(50,60,50);
     lights();
@@ -116,7 +124,7 @@ public void draw() {
     bats.drawBoids();
 
     if (debugMode) {
-        // drawPRMGraph();
+        drawPRMGraph();
         pushStyle();
         stroke(255,0,0);
         strokeWeight(10);
@@ -135,17 +143,21 @@ public void draw() {
 }
 
 public void update(float dt) {
+    avoidAgents(agents);
+
     player.update(dt);
     joker.update(dt);
     cam.camLookAt = player.position;
     for (int i = 0; i < paths.length; i++) {
         if (player.batCallActive[i] && paths[i] != null) {
             updatePositionAlongPath(dt, i);
+        } else {
+            bats.tetherPoints[i] = new Vec3(startPositions[i].x, 5, startPositions[i].y);
         }
     }
 
     bats.updateBoidPositions(dt);
-    // bats.checkForCollisions(rigidBodies, numObstacles);
+    bats.checkForCollisions(rigidBodies, numObstacles);
 }
 
 public void updatePositionAlongPath(float dt, int idx) {
@@ -196,7 +208,7 @@ public void createObstacles() {
         float height = random(11,12);
         Vec3 pos = new Vec3(random(-80,80), -5 + height/2, random(-80,80));
         obstacles[i] = new Cylinder(radius, height, pos);
-        circleRad[i] = radius;
+        circleRad[i] = radius + 3;
         circlePos[i] = new Vec2(pos.x, pos.z);
     }
 }
@@ -221,6 +233,74 @@ public void drawObstacles() {
 }
 // Max Omdal 2020
 
+class Agent {
+    Vec3 position;
+    Vec2 position2D;
+    float speed = 20;
+    Vec2 velocity = new Vec2();
+    Vec2 goalVelocity = new Vec2();
+    float goalForceStrength = 5;
+    float collisionRadius = 2;
+    float timeHorizon = 4;
+    float maxForce = 1000;
+    Vec2 forces = new Vec2();
+    PathTraversal pathMaker;
+    float orientationAngle = 0;
+
+    public Agent() {
+    }
+}
+
+public void avoidAgents(ArrayList<Agent> agents) {
+    for (int i = 0; i < agents.size(); i++) {
+        Agent a = agents.get(i);
+        Vec2 forceToGoal = a.goalVelocity.minus(a.velocity).times(a.goalForceStrength);
+        a.forces = forceToGoal;
+        for (int j = 0; j < agents.size(); j++) {
+            if (j == i) {
+                continue;
+            }
+            Agent b = agents.get(j);
+            float t = ttc(a, b);
+            if (t == Float.MAX_VALUE) {
+                continue;
+            }
+            Vec2 avoidanceDir = a.position2D.plus(a.velocity.times(t)).minus(b.position2D.plus(b.velocity.times(t)));
+            if (avoidanceDir.length() != 0) {
+                avoidanceDir.normalize();
+            }
+            float mag = 0;
+            if (t >= 0 && t <= a.timeHorizon)
+                mag = (a.timeHorizon-t)/(t+0.001f);
+            if (mag > a.maxForce)
+                mag = a.maxForce;
+            Vec2 avoidanceForce = avoidanceDir.times(mag);
+            a.forces.add(avoidanceForce);
+        }
+    }
+}
+
+public float ttc(Agent agent_1, Agent agent_2) {
+    Vec2 w = agent_1.position2D.minus(agent_2.position2D);
+    Vec2 v = agent_2.velocity.minus(agent_1.velocity);
+    float a = dot(v,v);
+    float b = dot(w,v);
+    float c = dot(w,w) - pow(agent_2.collisionRadius+agent_1.collisionRadius, 2);
+    if (c < 0) {
+        return 0;
+    }
+    float discr = b*b - a*c;
+    if (discr <= 0) {
+        return Float.MAX_VALUE;
+    }
+    float timeToCollision = (b - sqrt(discr))/a;
+    if (timeToCollision < 0) {
+        return Float.MAX_VALUE;
+    }
+    return timeToCollision;
+}
+// Max Omdal 2020
+
 class Bats extends BoidSystem {
     // Bats have multiple tether points and tuned parameters
 
@@ -237,10 +317,10 @@ class Bats extends BoidSystem {
         boids = new ArrayList<Boid>();
         this.tetherPoints = new Vec3[numTetherPoints];
         this.boundingBoxOrigin = new Vec3(0,0,0);
-        this.maxSpeed = 200;
-        this.visualDistance = 0.9f;
+        this.maxSpeed = 100;
+        this.visualDistance = 1.5f;
         this.influenceToTetherPoint = 1.5f;
-        this.separation = 1.5f;
+        this.separation = 2.5f;
         this.boidSize = 5;
 
         for (int i = 0; i < numTetherPoints; i++) {
@@ -1108,25 +1188,20 @@ class Cylinder {
 }
 // Max Omdal 2020
 
-class Enemy {
-    Vec3 position;
-    Vec2 position2D;
-    float speed = 20;
-    Vec2 velocity;
-    float collisionRadius = 2;
+class Enemy extends Agent {
     PImage hoverPointer;
     float hoverBounce = 0;
     boolean freeToMove = false;
     PathTraversal pathMaker;
-    float orientationAngle = 0;
     PShape model;
 
     public Enemy(Vec3 initialPosition) {
+        super();
         this.position = initialPosition;
         this.position2D = new Vec2(position.x, position.z);
         this.pathMaker = new PathTraversal();
         this.hoverPointer = loadImage("hover_pointer.png");
-        this.model = loadShape("stanford_bunny.obj");
+        this.model = loadShape("joker.obj");
     }
 
     public void startMove() {
@@ -1135,61 +1210,55 @@ class Enemy {
         this.pathMaker.setPath(this.position2D, player.position2D);
     }
 
-    public void avoidProbes(ArrayList<Probe> probes) {
-        // Use time to collision to avoid intersection with projectile
-        for (Probe probe : probes) {
-            Vec3 posToProbe = probe.position.minus(this.position);
-            float timeToCollision = posToProbe.length();
-        }
-    }
-
     public void update(float dt) {
         hoverBounce += 3*dt;
-        
+
         if (freeToMove) {
+            if (forces != null)
+                this.velocity.add(forces.times(dt));
+            this.position2D.add(this.velocity.times(dt));
+            this.position.x = this.position2D.x;
+            this.position.z = this.position2D.y;
             if (pathMaker.path != null && pathMaker.path.size() > 1) {
-                // TODO: use path to target to take forward movement
                 this.pathMaker.updateMovementDir(position2D);
-                this.velocity = this.pathMaker.movementDir.times(speed);
-                this.position2D.add(this.velocity.times(dt));
-                this.position.x = this.position2D.x;
-                this.position.z = this.position2D.y;
+                this.goalVelocity = this.pathMaker.movementDir.times(speed);
+
                 if (pathMaker.destinationReached) {
                     freeToMove = false;
+                    this.velocity = new Vec2();
                 }
             }
         }
     }
 
     public void draw() {
-        Cylinder body = new Cylinder(0.3f,2, this.position.plus(new Vec3(0, 1, 0)));
-        body.materialColor = new Vec3(255,255,10);
-
-        Vec2 movementDir = new Vec2(0,0);
-        Vec2 nextNodePos = pathMaker.getNextNodeOnPath();
-        if (nextNodePos != null) {
-            movementDir = nextNodePos.minus(position2D).normalized();
-        }
-        float movementAngle = atan2(movementDir.y, movementDir.x);
-        if (movementAngle - orientationAngle > PI) {
-            orientationAngle = orientationAngle + 0.05f * (2*PI - movementAngle - orientationAngle);
+        Vec2 movementDir = velocity.normalized();
+        if (freeToMove) {
+            orientationAngle = atan2(movementDir.y, movementDir.x);
         } else {
-            orientationAngle = orientationAngle + 0.05f * (movementAngle - orientationAngle);
+            orientationAngle = 0;
         }
-        push();
+        // if (movementAngle > orientationAngle) {
+        //     orientationAngle = orientationAngle + 0.1 * (2*PI - movementAngle - orientationAngle);
+        // } else {
+        //     orientationAngle = orientationAngle + 0.1 * (movementAngle - orientationAngle);
+        // }
         if (this.model == null) {
+            Cylinder body = new Cylinder(0.3f,2, this.position.plus(new Vec3(0, 1, 0)));
+            body.materialColor = new Vec3(255,255,10);
             rotateY(-orientationAngle-3*PI/2);
             body.draw();
         } else {
+            push();
             translate(position.x, position.y, position.z);
             rotateY(-orientationAngle-3*PI/2);
             shape(this.model);
+            pop();
         }
-        pop();
 
         push();
         noStroke();
-        translate(position.x, position.y + 5 + 0.5f*cos(hoverBounce), position.z);
+        translate(position.x, position.y + 8 + 0.5f*cos(hoverBounce), position.z);
         Vec3 camToPlayer = position.minus(cam.camLocation).normalized();
         Vec2 camToPlayer2D = new Vec2(camToPlayer.x, camToPlayer.z).normalized();
         float angle = atan2(camToPlayer2D.y,camToPlayer2D.x);
@@ -1712,8 +1781,11 @@ public int closestNode(Vec2 point, Vec2[] nodePos, int numNodes){
 
 public ArrayList<Integer> planPath(Vec2 startPos, Vec2 goalPos, Vec2[] centers, float[] radii, int numObstacles, Vec2[] nodePos, int numNodes){
   ArrayList<Integer> path = new ArrayList();
-  // int startID = closestNode(startPos, nodePos, numNodes);
-  // int goalID = closestNode(goalPos, nodePos, numNodes);
+
+  if (startPos == goalPos) {
+    return null;
+  }
+
   int startID = numNodes;
   int goalID = numNodes + 1;
 
@@ -1904,15 +1976,15 @@ public void drawPRMGraph() {
     for (int i = 0; i < numNodes; i++) {
         point(nodePos[i].x, -3, nodePos[i].y);
     }
-    stroke(255,0,0);
-    strokeWeight(0.3f);
-    for (int i = 0; i < numNodes; i++) {
-      Vec3 pos = new Vec3(nodePos[i].x, -3, nodePos[i].y);
-      for (int neighbor : neighbors[i]) {
-        Vec3 neighborPos = new Vec3(nodePos[neighbor].x, -3, nodePos[neighbor].y);
-        line(pos.x, pos.y, pos.z, neighborPos.x, neighborPos.y, neighborPos.z);
-      }
-    }
+    // stroke(255,0,0);
+    // strokeWeight(0.3);
+    // for (int i = 0; i < numNodes; i++) {
+    //   Vec3 pos = new Vec3(nodePos[i].x, -3, nodePos[i].y);
+    //   for (int neighbor : neighbors[i]) {
+    //     Vec3 neighborPos = new Vec3(nodePos[neighbor].x, -3, nodePos[neighbor].y);
+    //     line(pos.x, pos.y, pos.z, neighborPos.x, neighborPos.y, neighborPos.z);
+    //   }
+    // }
     pop();
 }
 
@@ -2323,18 +2395,24 @@ class PathTraversal {
     boolean destinationReached = false;
     Vec2 movementDir;
 
-    public void setPath(Vec2 startPos, Vec2 goalPos) {
+    public boolean setPath(Vec2 startPos, Vec2 goalPos) {
         this.startPos = new Vec2(startPos);
         this.goalPos = new Vec2(goalPos);
         this.path = planPath(startPos, goalPos, circlePos, circleRad, numObstacles, nodePos, numNodes);
         this.nextNodeIdx = 1;
+        if (path == null || path.size() == 1) {
+            return false;
+        }
         this.movementDir = nodePos[path.get(1)].minus(startPos);
         this.distanceToNextNode = movementDir.length();
         this.movementDir.normalize();
+        return true;
     }
 
     public Vec2 getNextNodeOnPath() {
         if (path != null) {
+            if (nextNodeIdx == path.size() - 1)
+                return this.goalPos;
             return nodePos[path.get(nextNodeIdx)];
         } else {
             return null;
@@ -2344,7 +2422,6 @@ class PathTraversal {
     public void updateMovementDir(Vec2 curPos) {
         nodePos[numNodes] = startPos;
         nodePos[numNodes+1] = goalPos;
-
         Vec2 curPosToNode = nodePos[path.get(nextNodeIdx)].minus(curPos);
 
         // Check to see if we can shortcut any nodes
@@ -2387,13 +2464,16 @@ class Player {
     boolean[] batCallActive = {false, false, false};
     PImage hoverPointer;
     float hoverBounce = 0;
+    PShape model;
     ArrayList<Projectile> projectiles = new ArrayList<Projectile>();
     ArrayList<Probe> probes = new ArrayList<Probe>();
+    float orientationAngle;
 
     public Player(Vec3 initialPosition) {
         this.position = initialPosition;
         this.position2D = new Vec2(position.x, position.z);
         hoverPointer = loadImage("hover_pointer.png");
+        this.model = loadShape("batman.obj");
     }
 
     public void update(float dt) {
@@ -2413,11 +2493,9 @@ class Player {
                 probe.update(dt);
             } else {
                 probes.remove(i);
+                agents.remove(i+1);
                 i--;
             }
-        }
-        if (batCallActive[0] || batCallActive[1] || batCallActive[2]) {
-            return;
         }
         if (keyPressed) {
             Vec3 positionUpdate = new Vec3();
@@ -2444,7 +2522,7 @@ class Player {
                 Vec3 rotatedPositionUpdate = new Vec3(cos(rotationAngle)*positionUpdate.x + sin(rotationAngle)*positionUpdate.z,
                                                       positionUpdate.y,
                                                       -sin(rotationAngle)*positionUpdate.x + cos(rotationAngle)*positionUpdate.z);
-
+                orientationAngle = -atan2(rotatedPositionUpdate.z, rotatedPositionUpdate.x)-3*PI/2;
                 position.add(rotatedPositionUpdate.times(dt*speed));
                 position2D.x = position.x;
                 position2D.y = position.z;
@@ -2453,16 +2531,21 @@ class Player {
     }
 
     public void draw() {
-        Cylinder body = new Cylinder(0.3f,2, this.position.plus(new Vec3(0, 1, 0)));
-        body.materialColor = new Vec3(255,10,10);
-        body.draw();
-
+        if (this.model == null) {
+                Cylinder body = new Cylinder(0.3f,2, this.position.plus(new Vec3(0, 1, 0)));
+            body.materialColor = new Vec3(255,10,10);
+            body.draw();
+        } else {
+            push();
+            translate(position.x, position.y, position.z);
+            rotateY(orientationAngle);
+            shape(this.model);
+            pop();
+        }
         for (int i = 0; i < 3; i++) {
-            if (batCallActive[i]) {
-                Cylinder focusRing = new Cylinder(0.9f, 0.1f, new Vec3(goalPositions[i].x, 0.05f, goalPositions[i].y));
-                focusRing.materialColor = new Vec3(200,200,0);
-                focusRing.draw();
-            }
+            Cylinder focusRing = new Cylinder(0.9f, 0.1f, new Vec3(goalPositions[i].x, -2, goalPositions[i].y));
+            focusRing.materialColor = new Vec3(200,200,0);
+            focusRing.draw();
         }
 
         for (Projectile projectile : projectiles) {
@@ -2474,7 +2557,7 @@ class Player {
 
         push();
         noStroke();
-        translate(position.x, position.y + 5 + 0.5f*cos(hoverBounce), position.z);
+        translate(position.x, position.y + 8 + 0.5f*cos(hoverBounce), position.z);
         Vec3 camToPlayer = position.minus(cam.camLocation).normalized();
         Vec2 camToPlayer2D = new Vec2(camToPlayer.x, camToPlayer.z).normalized();
         float angle = atan2(camToPlayer2D.y,camToPlayer2D.x);
@@ -2498,55 +2581,60 @@ class Player {
     }
 
     public void launchProbe(Vec2 goalPos) {
-        probes.add(new Probe(this.position2D, goalPos));
+        Probe probe = new Probe(new Vec2(this.position2D), goalPos);
+        probes.add(probe);
+        agents.add(probe);
     }
 }
 // Max Omdal 2020
 
-class Probe {
-    Vec3 position;
-    Vec2 position2D;
-    float speed = 10;
-    Vec2 velocity;
-    float collisionRadius = 1.5f;
+class Probe extends Agent {
     PShape model = createShape(BOX,1,1,1);
     PathTraversal pathMaker;
-    float orientationAngle = 0;
     boolean isActive = true;
 
     public Probe(Vec2 startPos, Vec2 goalPos) {
+        super();
         pathMaker = new PathTraversal();
-        pathMaker.setPath(startPos, goalPos);
+        boolean successfulPath = pathMaker.setPath(startPos, goalPos);
+        if (!successfulPath) {
+            // If we can't get to the actual desired position, we will not send a probe
+            this.isActive = false;
+        }
         this.position2D = startPos;
         this.position = new Vec3(this.position2D.x, -5, this.position2D.y);
     }
 
     public void update(float dt) {
+        if (forces != null)
+            this.velocity.add(forces.times(dt));
+        this.position2D.add(this.velocity.times(dt));
+        this.position.x = this.position2D.x;
+        this.position.z = this.position2D.y;
+
         if (pathMaker.path != null && pathMaker.path.size() > 1) {
-            // TODO: use path to target to take forward movement
             this.pathMaker.updateMovementDir(position2D);
-            this.velocity = this.pathMaker.movementDir.times(speed);
-            this.position2D.add(this.velocity.times(dt));
-            this.position.x = this.position2D.x;
-            this.position.z = this.position2D.y;
+            this.goalVelocity = this.pathMaker.movementDir.times(speed);
+
             if (pathMaker.destinationReached) {
                 this.isActive = false;
+                this.velocity = new Vec2();
             }
         }
     }
 
     public void draw() {
-        Vec2 movementDir = new Vec2(0,0);
-        Vec2 nextNodePos = pathMaker.getNextNodeOnPath();
-        if (nextNodePos != null) {
-            movementDir = nextNodePos.minus(position2D).normalized();
+        if (!this.isActive) {
+            return;
         }
+        Vec2 movementDir = velocity.normalized();
         float movementAngle = atan2(movementDir.y, movementDir.x);
-        if (movementAngle - orientationAngle > PI) {
-            orientationAngle = orientationAngle + 0.05f * (2*PI - movementAngle - orientationAngle);
-        } else {
-            orientationAngle = orientationAngle + 0.05f * (movementAngle - orientationAngle);
-        }
+        // if (movementAngle > orientationAngle) {
+        //     orientationAngle = orientationAngle + 0.1 * (2*PI - movementAngle - orientationAngle);
+        // } else {
+        //     orientationAngle = orientationAngle + 0.1 * (movementAngle - orientationAngle);
+        // }
+        orientationAngle = movementAngle;
 
         push();
         if (this.model == null) {
@@ -2555,6 +2643,16 @@ class Probe {
             translate(position.x, position.y, position.z);
             rotateY(-orientationAngle-3*PI/2);
             shape(this.model);
+        }
+        pop();
+        push();
+        stroke(255,0,0);
+        strokeWeight(1);
+        if (debugMode) {
+            Vec3 velDir = new Vec3(this.velocity.x*0.1f + this.position.x,
+                                   this.position.y,
+                                   this.velocity.y*0.1f + this.position.z);
+            line(this.position.x, this.position.y, this.position.z, velDir.x, velDir.y, velDir.z);
         }
         pop();
     }
@@ -2751,6 +2849,8 @@ public void keyPressed() {
                 distanceToNextNode[i] = nodePos[paths[i].get(1)].minus(startPositions[i]).length();
                 posAlongPath[i] = new Vec2(nodePos[paths[i].get(0)]);
                 bats.tetherPoints[i] = new Vec3(posAlongPath[i].x, 5, posAlongPath[i].y);
+            } else {
+                player.batCallActive[i] = false;
             }
         }
         // Set path for joker
@@ -2806,6 +2906,11 @@ public void mouseClicked() {
 //              Vec3 must also support the cross product.
 public class Vec2 {
   public float x, y;
+
+  public Vec2() {
+    this.x = 0;
+    this.y = 0;
+  }
   
   public Vec2(float x, float y){
     this.x = x;

@@ -49,6 +49,8 @@ void keyPressed() {
                 distanceToNextNode[i] = nodePos[paths[i].get(1)].minus(startPositions[i]).length();
                 posAlongPath[i] = new Vec2(nodePos[paths[i].get(0)]);
                 bats.tetherPoints[i] = new Vec3(posAlongPath[i].x, 5, posAlongPath[i].y);
+            } else {
+                player.batCallActive[i] = false;
             }
         }
         // Set path for joker

@@ -8,11 +8,12 @@ class Enemy extends Agent {
     PShape model;
 
     public Enemy(Vec3 initialPosition) {
+        super();
         this.position = initialPosition;
         this.position2D = new Vec2(position.x, position.z);
         this.pathMaker = new PathTraversal();
         this.hoverPointer = loadImage("hover_pointer.png");
-        this.model = loadShape("stanford_bunny.obj");
+        this.model = loadShape("joker.obj");
     }
 
     public void startMove() {
@@ -24,15 +25,13 @@ class Enemy extends Agent {
     public void update(float dt) {
         hoverBounce += 3*dt;
 
-        if (forces != null)
-            this.velocity.add(forces.times(dt));
-        this.position2D.add(this.velocity.times(dt));
-        this.position.x = this.position2D.x;
-        this.position.z = this.position2D.y;
-        
         if (freeToMove) {
+            if (forces != null)
+                this.velocity.add(forces.times(dt));
+            this.position2D.add(this.velocity.times(dt));
+            this.position.x = this.position2D.x;
+            this.position.z = this.position2D.y;
             if (pathMaker.path != null && pathMaker.path.size() > 1) {
-                // TODO: use path to target to take forward movement
                 this.pathMaker.updateMovementDir(position2D);
                 this.goalVelocity = this.pathMaker.movementDir.times(speed);
 
@@ -45,34 +44,33 @@ class Enemy extends Agent {
     }
 
     public void draw() {
-        Cylinder body = new Cylinder(0.3,2, this.position.plus(new Vec3(0, 1, 0)));
-        body.materialColor = new Vec3(255,255,10);
-
-        Vec2 movementDir = new Vec2(0,0);
-        Vec2 nextNodePos = pathMaker.getNextNodeOnPath();
-        if (nextNodePos != null) {
-            movementDir = nextNodePos.minus(position2D).normalized();
-        }
-        float movementAngle = atan2(movementDir.y, movementDir.x);
-        if (movementAngle - orientationAngle > PI) {
-            orientationAngle = orientationAngle + 0.1 * (2*PI - movementAngle - orientationAngle);
+        Vec2 movementDir = velocity.normalized();
+        if (freeToMove) {
+            orientationAngle = atan2(movementDir.y, movementDir.x);
         } else {
-            orientationAngle = orientationAngle + 0.1 * (movementAngle - orientationAngle);
+            orientationAngle = 0;
         }
-        push();
+        // if (movementAngle > orientationAngle) {
+        //     orientationAngle = orientationAngle + 0.1 * (2*PI - movementAngle - orientationAngle);
+        // } else {
+        //     orientationAngle = orientationAngle + 0.1 * (movementAngle - orientationAngle);
+        // }
         if (this.model == null) {
+            Cylinder body = new Cylinder(0.3,2, this.position.plus(new Vec3(0, 1, 0)));
+            body.materialColor = new Vec3(255,255,10);
             rotateY(-orientationAngle-3*PI/2);
             body.draw();
         } else {
+            push();
             translate(position.x, position.y, position.z);
             rotateY(-orientationAngle-3*PI/2);
             shape(this.model);
+            pop();
         }
-        pop();
 
         push();
         noStroke();
-        translate(position.x, position.y + 5 + 0.5*cos(hoverBounce), position.z);
+        translate(position.x, position.y + 8 + 0.5*cos(hoverBounce), position.z);
         Vec3 camToPlayer = position.minus(cam.camLocation).normalized();
         Vec2 camToPlayer2D = new Vec2(camToPlayer.x, camToPlayer.z).normalized();
         float angle = atan2(camToPlayer2D.y,camToPlayer2D.x);

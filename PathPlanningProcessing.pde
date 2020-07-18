@@ -1,6 +1,7 @@
 // Max Omdal 2020
 import java.util.Arrays;
 
+int curTime;
 boolean paused = false;
 Camera cam = new Camera();
 int maxNumNodes = 2000;
@@ -16,6 +17,7 @@ Vec2[] posAlongPath = new Vec2[3];
 int[] nextNodeIdx = new int[3];
 float[] distanceToNextNode = new float[3];
 int nextSpawnIndex = 0;
+ArrayList<Agent> agents = new ArrayList<Agent>();
 
 PShader unlitShader;
 
@@ -59,7 +61,9 @@ void setup() {
     player = new Player(new Vec3(0, -5, 0));
     joker = new Enemy(new Vec3(nodePos[3].x, -5, nodePos[3].y));
 
-    bats = new Bats(10);
+    agents.add(joker);
+
+    bats = new Bats(20);
     bats.spawnPoints = spawnPoints;
     bats.numTetherPoints = 3;
     bats.initialize();
@@ -71,6 +75,10 @@ void setup() {
 }
 
 void draw() {
+    curTime = millis();
+    if (curTime % 1000 < 10) {
+        println(frameRate);
+    }
     cam.update();
     background(50,60,50);
     lights();
@@ -95,7 +103,7 @@ void draw() {
     bats.drawBoids();
 
     if (debugMode) {
-        // drawPRMGraph();
+        drawPRMGraph();
         pushStyle();
         stroke(255,0,0);
         strokeWeight(10);
@@ -114,17 +122,21 @@ void draw() {
 }
 
 void update(float dt) {
+    avoidAgents(agents);
+
     player.update(dt);
     joker.update(dt);
     cam.camLookAt = player.position;
     for (int i = 0; i < paths.length; i++) {
         if (player.batCallActive[i] && paths[i] != null) {
             updatePositionAlongPath(dt, i);
+        } else {
+            bats.tetherPoints[i] = new Vec3(startPositions[i].x, 5, startPositions[i].y);
         }
     }
 
     bats.updateBoidPositions(dt);
-    // bats.checkForCollisions(rigidBodies, numObstacles);
+    bats.checkForCollisions(rigidBodies, numObstacles);
 }
 
 void updatePositionAlongPath(float dt, int idx) {
@@ -175,7 +187,7 @@ void createObstacles() {
         float height = random(11,12);
         Vec3 pos = new Vec3(random(-80,80), -5 + height/2, random(-80,80));
         obstacles[i] = new Cylinder(radius, height, pos);
-        circleRad[i] = radius;
+        circleRad[i] = radius + 3;
         circlePos[i] = new Vec2(pos.x, pos.z);
     }
 }

@@ -7,13 +7,16 @@ class Player {
     boolean[] batCallActive = {false, false, false};
     PImage hoverPointer;
     float hoverBounce = 0;
+    PShape model;
     ArrayList<Projectile> projectiles = new ArrayList<Projectile>();
     ArrayList<Probe> probes = new ArrayList<Probe>();
+    float orientationAngle;
 
     public Player(Vec3 initialPosition) {
         this.position = initialPosition;
         this.position2D = new Vec2(position.x, position.z);
         hoverPointer = loadImage("hover_pointer.png");
+        this.model = loadShape("batman.obj");
     }
 
     public void update(float dt) {
@@ -33,11 +36,9 @@ class Player {
                 probe.update(dt);
             } else {
                 probes.remove(i);
+                agents.remove(i+1);
                 i--;
             }
-        }
-        if (batCallActive[0] || batCallActive[1] || batCallActive[2]) {
-            return;
         }
         if (keyPressed) {
             Vec3 positionUpdate = new Vec3();
@@ -64,7 +65,7 @@ class Player {
                 Vec3 rotatedPositionUpdate = new Vec3(cos(rotationAngle)*positionUpdate.x + sin(rotationAngle)*positionUpdate.z,
                                                       positionUpdate.y,
                                                       -sin(rotationAngle)*positionUpdate.x + cos(rotationAngle)*positionUpdate.z);
-
+                orientationAngle = -atan2(rotatedPositionUpdate.z, rotatedPositionUpdate.x)-3*PI/2;
                 position.add(rotatedPositionUpdate.times(dt*speed));
                 position2D.x = position.x;
                 position2D.y = position.z;
@@ -73,16 +74,21 @@ class Player {
     }
 
     public void draw() {
-        Cylinder body = new Cylinder(0.3,2, this.position.plus(new Vec3(0, 1, 0)));
-        body.materialColor = new Vec3(255,10,10);
-        body.draw();
-
+        if (this.model == null) {
+                Cylinder body = new Cylinder(0.3,2, this.position.plus(new Vec3(0, 1, 0)));
+            body.materialColor = new Vec3(255,10,10);
+            body.draw();
+        } else {
+            push();
+            translate(position.x, position.y, position.z);
+            rotateY(orientationAngle);
+            shape(this.model);
+            pop();
+        }
         for (int i = 0; i < 3; i++) {
-            if (batCallActive[i]) {
-                Cylinder focusRing = new Cylinder(0.9, 0.1, new Vec3(goalPositions[i].x, 0.05, goalPositions[i].y));
-                focusRing.materialColor = new Vec3(200,200,0);
-                focusRing.draw();
-            }
+            Cylinder focusRing = new Cylinder(0.9, 0.1, new Vec3(goalPositions[i].x, -2, goalPositions[i].y));
+            focusRing.materialColor = new Vec3(200,200,0);
+            focusRing.draw();
         }
 
         for (Projectile projectile : projectiles) {
@@ -94,7 +100,7 @@ class Player {
 
         push();
         noStroke();
-        translate(position.x, position.y + 5 + 0.5*cos(hoverBounce), position.z);
+        translate(position.x, position.y + 8 + 0.5*cos(hoverBounce), position.z);
         Vec3 camToPlayer = position.minus(cam.camLocation).normalized();
         Vec2 camToPlayer2D = new Vec2(camToPlayer.x, camToPlayer.z).normalized();
         float angle = atan2(camToPlayer2D.y,camToPlayer2D.x);
@@ -118,6 +124,8 @@ class Player {
     }
 
     public void launchProbe(Vec2 goalPos) {
-        probes.add(new Probe(this.position2D, goalPos));
+        Probe probe = new Probe(new Vec2(this.position2D), goalPos);
+        probes.add(probe);
+        agents.add(probe);
     }
 }
